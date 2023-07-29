@@ -1,5 +1,5 @@
 import React from 'react'
-import Uploader from './Uploader'
+import Uploader from './components/Uploader'
 
 function App() {
 
