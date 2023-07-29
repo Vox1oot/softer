@@ -1,105 +1,82 @@
-import React, { useCallback, useReducer, useState } from 'react';
+import React, { useCallback, useReducer, useRef } from 'react';
+import { State, Action, ActionType } from './uploader.interface';
 import axios from 'axios';
-import InputPicker from '../InputPicker';
+import styles from './Uploader.module.css';
 
-const yandexDiskToken = import.meta.env.VITE_YANDEX_TOKEN;
-const requesrtPath = 'https://cloud-api.yandex.net/v1/disk/resources/upload';
+const TOKEN = import.meta.env.VITE_YANDEX_TOKEN;
+const YANDEX_UPLOAD_URL = 'https://cloud-api.yandex.net/v1/disk/resources/upload';
 
-interface IInitialState {
-    files: File[],
-    error: string,
-    status: string,
-}
-
-interface Action {
-    type: ACTION_TYPE,
-    payload: string | File[],
-}
-
-enum ACTION_TYPE {
-    ADD_FILES = 'ADD_FILES',
-    SET_ERROR = 'SET_ERROR',
-    SET_STATUS = 'SET_STATUS',
-}
-
-const reducer = (state: IInitialState, action: Action) => {
+const reducer = (state: State, action: Action): State => {
     switch (action.type) {
-        case ACTION_TYPE.ADD_FILES: {
-            return {
-                ...state,
-                files: action.payload,
-                error: '',
-            }
-        }
-        case ACTION_TYPE.SET_ERROR: {
-            return {
-                ...state,
-                error: action.payload,
-                status: 'error',
-            }
-        }
-        case ACTION_TYPE.SET_STATUS: {
-            return {
-                ...state,
-                status: action.payload
-            }
-        }
+        case ActionType.SET_SELECTED_FILE:
+            return { ...state, files: action.payload };
+        case ActionType.SET_COUNT:
+            return { ...state, count: action.payload };
+        case ActionType.SET_ERROR:
+            return { ...state, error: action.payload };
+        default:
+            return state;
     }
 };
 
-const initialState: IInitialState = {
+const initialState: State = {
     files: [],
+    count: 0,
     error: 'Необходимо добавить файлы',
-    status: 'idle',
-}
+};
 
-const Uploader: React.FC = () => {
+const UploadFileToYandexDisk: React.FC = () => {
     const [state, dispatch] = useReducer(reducer, initialState);
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
-    const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) {
-            if (event.target.files.length >= 1 && event.target.files.length < 100) {
-                const selectedFiles = Array.from(event.target.files);
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files.length > 0) {
+            const files = Array.from(event.target.files);
 
-                dispatch({ type: ACTION_TYPE.ADD_FILES, payload: selectedFiles });
-            } else {
-                dispatch({ types: ACTION_TYPE.SET_ERROR, paylod: 'Можно добавить от 1 до 100 файлов' });
-            }
-        } else {
-            dispatch({ type: ACTION_TYPE.SET_ERROR, payload: 'Необходимо добавить файлы' });
+            dispatch({ type: ActionType.SET_SELECTED_FILE, payload: files });
+            dispatch({ type: ActionType.SET_ERROR, payload: '' })
         }
-    }, []);
+    };
 
-    const handleFileUpload = async () => {
-        dispatch({ type: ACTION_TYPE.SET_STATUS, payload: 'loading'});
+    const handleFileSelect = () => {
+        if (inputRef.current) {
+            inputRef.current.click();
+        }
+    }
 
-        const formData = new FormData();
-        formData.append('file', state.files);
+    const handleFileUpload = useCallback(() => {
+        if (state.files.length > 0 && state.files.length < 100) {
 
-        for (const file of state.files) {
-            try {
-                const response = await axios
-                    .get(requesrtPath, { headers: { Authorization: `OAuth ${yandexDiskToken}`,}, params: { path: `${file.name}`, overwrite: true } });
+            for (const file of state.files) {
+                const formData = new FormData();
+                formData.append('file', file);
 
-                    const uploadUrl = response.data.href;
-                    const res = await axios.put(uploadUrl, formData);
-            } catch (error) {
-                dispatch({ type: ACTION_TYPE.SET_ERROR, payload: 'произошла ошибка загрузки'});
+                axios
+                    .get(YANDEX_UPLOAD_URL,
+                        { headers: { Authorization: `OAuth ${TOKEN}`}, params: { path: `${file.name}`, overwrite: true } })
+                    .then(({ data: { href } }) => { axios.put(href, formData) })
+                    .then(() => dispatch({ type: ActionType.SET_COUNT, payload: state.count += 1 }))
+                    .catch(() => dispatch({ type: ActionType.SET_ERROR, payload: 'Произошла ошибка загрузки файлов'}))
             }
         }
 
-  };
+        if (state.files.length > 100) {
+            dispatch({ type: ActionType.SET_ERROR, payload: 'Можно загружать до 100 файлов'})
+        }
+    }, [state.files]);
 
     return (
-        <>
-            <div className='uploader'>
-                <InputPicker onChange={handleFileChange}/>
-                <button onClick={handleFileUpload}>Upload</button>
+        <main>
+            <div className={styles.buttons}>
+                <button className={styles.button} onClick={handleFileSelect}>Выбрать файлы</button>
+                <input ref={inputRef} className={styles.hidden} type="file" onChange={handleFileChange} multiple />
+                <button className={styles.button} onClick={handleFileUpload} disabled={state.files.length === 0}>Загрузить</button>
             </div>
-            {state.error && <p className='error'>{state.error}</p>}
-            {state.files.length > 0 && <p>{`Вы добавили файлов: ${state.files.length} `}</p>}
-        </>
+            {!state.error && <p>{`Выбрано файлов: ${state.files.length}`}</p>}
+            {state.count > 0 && <p>{`Загруженно файлов: ${state.count}`}</p>}
+            {state.error && <p className={styles.error}>{state.error}</p>}
+        </main>
     );
 };
 
-export default Uploader;
+export default UploadFileToYandexDisk;

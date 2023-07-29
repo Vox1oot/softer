@@ -5,7 +5,9 @@ function App() {
 
   return (
     <div className='app'>
-        <header><h1>Uploader app</h1></header>
+        <header>
+            <h1>Загрузчик файлов</h1>
+        </header>
         <Uploader />
     </div>
   )
