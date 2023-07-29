@@ -1,56 +1,82 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useReducer, useRef } from 'react';
+import { State, Action, ActionType } from './uploader.interface';
 import axios from 'axios';
+import styles from './Uploader.module.css';
 
-const yandexDiskToken = import.meta.env.VITE_YANDEX_TOKEN;
-const requesrtPath = 'https://cloud-api.yandex.net/v1/disk/resources/upload';
+const TOKEN = import.meta.env.VITE_YANDEX_TOKEN;
+const YANDEX_UPLOAD_URL = 'https://cloud-api.yandex.net/v1/disk/resources/upload';
 
+const reducer = (state: State, action: Action): State => {
+    switch (action.type) {
+        case ActionType.SET_SELECTED_FILE:
+            return { ...state, files: action.payload };
+        case ActionType.SET_COUNT:
+            return { ...state, count: action.payload };
+        case ActionType.SET_ERROR:
+            return { ...state, error: action.payload };
+        default:
+            return state;
+    }
+};
 
+const initialState: State = {
+    files: [],
+    count: 0,
+    error: 'Необходимо добавить файлы',
+};
 
 const UploadFileToYandexDisk: React.FC = () => {
-  const [selectedFile, setSelectedFile] = useState<File[]>([]);
-  const [count, setCount] = useState(0);
-  const [error, setError] = useState('');
+    const [state, dispatch] = useReducer(reducer, initialState);
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      setSelectedFile(Array.from(event.target.files));
-    }
-  };
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files.length > 0) {
+            const files = Array.from(event.target.files);
 
-  const handleFileUpload = useCallback(() => {
-    if (selectedFile.length > 0 && selectedFile.length < 100) {
-        for (const file of selectedFile) {
-            const formData = new FormData();
-            formData.append('file', file);
+            dispatch({ type: ActionType.SET_SELECTED_FILE, payload: files });
+            dispatch({ type: ActionType.SET_ERROR, payload: '' })
+        }
+    };
 
-            axios
-                .get(requesrtPath,
-                    { headers: { Authorization: `OAuth ${yandexDiskToken}`}, params: { path: `${file.name}`, overwrite: true } })
-                .then(({ data: { href } }) => {
-                    axios.put(href, formData) })
-                .then(() => setCount((prev) => prev += 1))
+    const handleFileSelect = () => {
+        if (inputRef.current) {
+            inputRef.current.click();
         }
     }
 
-    if (selectedFile.length === 0) {
-        setError('Добавьте файлы');
-    }
+    const handleFileUpload = useCallback(() => {
+        if (state.files.length > 0 && state.files.length < 100) {
 
-    if (selectedFile.length > 100) {
-        setError('Можно загружать до 100 файлов')
-    }
-  }, [selectedFile]);
+            for (const file of state.files) {
+                const formData = new FormData();
+                formData.append('file', file);
 
-  return (
-    <main>
-        <div>
-            <input type="file" onChange={handleFileChange} multiple />
-            <button onClick={handleFileUpload}>Upload</button>
-        </div>
-        {count > 0 && <p>{`Загруженно файлов: ${count}`}</p>}
-        {error && <p>{error}</p>}
-    </main>
-  );
+                axios
+                    .get(YANDEX_UPLOAD_URL,
+                        { headers: { Authorization: `OAuth ${TOKEN}`}, params: { path: `${file.name}`, overwrite: true } })
+                    .then(({ data: { href } }) => { axios.put(href, formData) })
+                    .then(() => dispatch({ type: ActionType.SET_COUNT, payload: state.count += 1 }))
+                    .catch(() => dispatch({ type: ActionType.SET_ERROR, payload: 'Произошла ошибка загрузки файлов'}))
+            }
+        }
+
+        if (state.files.length > 100) {
+            dispatch({ type: ActionType.SET_ERROR, payload: 'Можно загружать до 100 файлов'})
+        }
+    }, [state.files]);
+
+    return (
+        <main>
+            <div className={styles.buttons}>
+                <button className={styles.button} onClick={handleFileSelect}>Выбрать файлы</button>
+                <input ref={inputRef} className={styles.hidden} type="file" onChange={handleFileChange} multiple />
+                <button className={styles.button} onClick={handleFileUpload} disabled={state.files.length === 0}>Загрузить</button>
+            </div>
+            {!state.error && <p>{`Выбрано файлов: ${state.files.length}`}</p>}
+            {state.count > 0 && <p>{`Загруженно файлов: ${state.count}`}</p>}
+            {state.error && <p className={styles.error}>{state.error}</p>}
+        </main>
+    );
 };
 
 export default UploadFileToYandexDisk;

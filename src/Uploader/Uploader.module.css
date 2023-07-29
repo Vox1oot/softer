@@ -1,0 +1,28 @@
+.buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.button {
+    width: 150px;
+    height: 50px;
+    border-radius: 25px;
+    font-size: 14px;
+}
+
+.hidden {
+    opacity: 0;
+    height: 0;
+    width: 0;
+    line-height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+}
+
+.error {
+    color: #ff3333;
+    font-size: 16px;
+    font-weight: 600;
+}
