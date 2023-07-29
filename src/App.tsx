@@ -4,10 +4,10 @@ import Uploader from './Uploader'
 function App() {
 
   return (
-    <>
-        <h1>Uploader app</h1>
+    <div className='app'>
+        <header><h1>Uploader app</h1></header>
         <Uploader />
-    </>
+    </div>
   )
 }
 
